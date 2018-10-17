@@ -9,7 +9,9 @@ using restfulaspnetcore.api.Model;
 
 namespace restfulaspnetcore.api.Controllers
 {
-    [Route("api/[controller]")]
+    [ApiVersion("1.0")]
+    [ApiVersion( "0.9", Deprecated = true )]
+    [Route("api/v{version:apiVersion}/[controller]")]
     [Produces("application/json")]
     [ApiController]
     public class LivrosController : ControllerBase
@@ -102,6 +104,7 @@ namespace restfulaspnetcore.api.Controllers
         /// <response code="204">Sem conteúdo. </response>
         /// <response code="404">Deleção não pode ser executada porque não foi encontrado um livro com a identificação informada.</response>
         [HttpDelete("{id}")]
+        [MapToApiVersion( "1.0" )]
         [ProducesResponseType(204)]
         [ProducesResponseType(typeof(Erro), 404)]
         public async Task<IActionResult> Delete(Guid id) {
