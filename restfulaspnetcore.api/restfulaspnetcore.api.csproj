@@ -4,12 +4,17 @@
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <DocumentationFile>$(MSBuildProjectName).xml</DocumentationFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <Folder Include="wwwroot\" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="3.0.0" />
   </ItemGroup>
 
 </Project>
