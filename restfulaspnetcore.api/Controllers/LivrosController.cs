@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -30,12 +31,39 @@ namespace restfulaspnetcore.api.Controllers
         /// Esse trecho é utilizado para detalhar um pouco melhor o funcionamento desse recuro. 
         /// Numa abordagem DataDrive, a consulta de uma informação ou - mais comumente - a inclusão, remoção ou deleteção de dados pode servir de gatilho para uma sequencia de eventos e processos de negócio</remarks>
         /// <returns>Lista de livros</returns>
+        /// <param name="page">Opcional. Pagina da consulta. Se omitido o resultado será baseado na primeira página de registro</param>
+        /// <param name="pageSize">Opcional. Tamanho da página de consulta. Se omitido assumirá o valor padrão 10</param>
+        /// <param name="sort">Opcional. Nomes de campos, separados por virgula, para ordenação ascendente dos resultados</param>
+        /// <param name="desc">Opcional. Nomes de campos, separados por vírgula, para ordenação descendente dos resultados</param>
         /// <response code="200">Lista de livros resultante da pesquisa</response>
         [HttpGet]
         [ProducesResponseType(typeof(IEnumerable<Livro>), 200)]
-        public async Task<IActionResult> GetTask() {
-            var _data = await _contexto.Livros.AsNoTracking().ToListAsync();
-            return Ok(_data);
+        public async Task<IActionResult> GetTask(int? page, int? pageSize, string sort, string desc) {
+            //PAGING
+            if ((page.HasValue && page.Value < 0) || (pageSize.HasValue && pageSize.Value < 0))
+                return BadRequest(new Erro(-8, "Pagina e tamanho de página devem ser números positivos"));
+            var _pageSize = pageSize.GetValueOrDefault(10);
+            var _page = (page.GetValueOrDefault(1) - 1) * _pageSize;
+            //QUERYING
+            IQueryable<Livro> _data = _contexto.Livros;
+            if (!string.IsNullOrEmpty(sort)) {
+                switch (sort.ToLowerInvariant())
+                {
+                    case "titulo": _data = _data.OrderBy(o => o.Titulo);break;
+                    case "paginas": _data = _data.OrderBy(o => o.Paginas);break;
+                }
+            }
+            if (!string.IsNullOrEmpty(desc)) {
+                switch (desc.ToLowerInvariant())
+                {
+                    case "titulo": _data = _data.OrderByDescending(o => o.Titulo);break;
+                    case "paginas": _data = _data.OrderByDescending(o => o.Paginas);break;
+                }
+            }
+            _data = _data
+                .Skip(_page)
+                .Take(_pageSize);
+            return Ok(await _data.AsNoTracking().ToListAsync());
         }
 
         /// <summary>
@@ -51,6 +79,26 @@ namespace restfulaspnetcore.api.Controllers
         public async Task<IActionResult> Get(Guid id) {
             var _data = await _contexto.Livros.FirstOrDefaultAsync(w => w.Id == id);
             if (_data == null) return NotFound(new Erro(-1, "Não foi possível localizar o livro desejado."));
+            return Ok(_data);
+        }
+
+        /// <summary>
+        /// Pesquisa o Autor de um determinado livro
+        /// </summary>
+        /// <param name="id">Identificação do livro</param>
+        /// <returns>Autor resultado da pesquisa</returns>
+        /// <response code="200">Autor do livro informado</response>
+        /// <response code="404">Não foi possível localizar um autor para o livro. O livro é inexistente ou não há autor informado.</response>
+        [HttpGet("{id}/autor")]
+        [ProducesResponseType(typeof(Autor), 200)]
+        [ProducesResponseType(typeof(Erro), 404)]
+        public async Task<IActionResult> GetAuthor(Guid id) {
+            var _data = await _contexto.Livros
+                .Include(i => i.Autor)
+                .Where(w => w.Id == id)
+                .Select(s => s.Autor)
+                .FirstOrDefaultAsync();
+            if (_data == null) return NotFound(new Erro(-7, "Não foi possível localizar o autor do livro informado"));
             return Ok(_data);
         }
 

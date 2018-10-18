@@ -1,0 +1,32 @@
+version: '2.1'
+services:
+  api:
+    build:
+      context: ./restfulaspnetcore.api
+    ports:
+      - '80:80'
+    networks: 
+      - skynet
+    depends_on:
+      - database
+      - cache
+  database:
+    # image: mcr.microsoft.com/mssql/server:2017-latest-ubuntu
+    build:
+      context: ./restfulaspnetcore.db
+    ports:
+      - 1433:1433
+    networks: 
+      - skynet
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=1aArdV4rk7
+  cache:
+    image: redis:4-alpine
+    ports:
+      - 6379:6379
+    networks: 
+      - skynet
+networks: 
+  skynet:
+    driver: bridge
