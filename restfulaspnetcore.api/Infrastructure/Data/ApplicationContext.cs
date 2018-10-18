@@ -8,6 +8,8 @@ namespace restfulaspnetcore.api.Infrastructure.Data
         public DbSet<Autor> Autores { get; set; }
         public DbSet<Livro> Livros { get; set; }
 
-        public ContextoAplicacao(DbContextOptions options): base(options) { }
+        public ContextoAplicacao(DbContextOptions options): base(options) {
+            this.Database.EnsureCreated();
+        }
     }
 }
