@@ -70,16 +70,40 @@ namespace restfulaspnetcore.api.Controllers
         /// Pesquisa um livro pela sua identificação.
         /// </summary>
         /// <param name="id">Identificação do livro</param>
+        /// <param name="accept">Accept header. Use to specify if HATEOAS with be used or not</param>
         /// <returns>Livro resultado da pesquisa</returns>
         /// <response code="200">Livro pesquisado</response>
         /// <response code="404">Não foi encontrado resultado para a pesquisa.</response>
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(Livro), 200)]
         [ProducesResponseType(typeof(Erro), 404)]
-        public async Task<IActionResult> Get(Guid id) {
+        public async Task<IActionResult> Get(Guid id, [FromHeader(Name="Accept")]string accept) {
             var _data = await _contexto.Livros.FirstOrDefaultAsync(w => w.Id == id);
             if (_data == null) return NotFound(new Erro(-1, "Não foi possível localizar o livro desejado."));
-            return Ok(_data);
+            if (accept.EndsWith("hateoas")) {
+                return Ok(new LinkHelper<Livro>{
+                    Value = _data,
+                    Links = new List<Link> {
+                        new Link{
+                            Href = Url.Link(nameof(Get), new { _data.Id }),
+                            Rel = "self",
+                            Method = "GET"
+                        },
+                        new Link{
+                            Href = Url.Link(nameof(Put), new { _data.Id }),
+                            Rel = "update-book",
+                            Method = "PUT"
+                        },
+                        new Link{
+                            Href = Url.Link(nameof(Delete), new { _data.Id }),
+                            Rel = "delete-book",
+                            Method = "DELETE"
+                        }
+                    }
+                });
+            } else {
+                return Ok(_data);
+            }
         }
 
         /// <summary>
