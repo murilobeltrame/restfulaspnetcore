@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Newtonsoft.Json;
 using restfulaspnetcore.api.DataTransport;
 using restfulaspnetcore.api.Infrastructure.Data;
 using restfulaspnetcore.api.Model;
@@ -17,10 +19,12 @@ namespace restfulaspnetcore.api.Controllers
     [ApiController]
     public class LivrosController : ControllerBase
     {
+        private readonly IDistributedCache _cache;
         private readonly ContextoAplicacao _contexto;
 
-        public LivrosController(ContextoAplicacao contexto)
+        public LivrosController(ContextoAplicacao contexto, IDistributedCache cache)
         {
+            _cache = cache;
             _contexto = contexto;
         }
 
@@ -74,36 +78,49 @@ namespace restfulaspnetcore.api.Controllers
         /// <returns>Livro resultado da pesquisa</returns>
         /// <response code="200">Livro pesquisado</response>
         /// <response code="404">Não foi encontrado resultado para a pesquisa.</response>
-        [HttpGet("{id}")]
+        [HttpGet("{id}", Name = "Get")]
         [ProducesResponseType(typeof(Livro), 200)]
         [ProducesResponseType(typeof(Erro), 404)]
         public async Task<IActionResult> Get(Guid id, [FromHeader(Name="Accept")]string accept) {
-            var _data = await _contexto.Livros.FirstOrDefaultAsync(w => w.Id == id);
-            if (_data == null) return NotFound(new Erro(-1, "Não foi possível localizar o livro desejado."));
-            if (accept.EndsWith("hateoas")) {
-                return Ok(new LinkHelper<Livro>{
-                    Value = _data,
-                    Links = new List<Link> {
-                        new Link{
-                            Href = Url.Link(nameof(Get), new { _data.Id }),
-                            Rel = "self",
-                            Method = "GET"
-                        },
-                        new Link{
-                            Href = Url.Link(nameof(Put), new { _data.Id }),
-                            Rel = "update-book",
-                            Method = "PUT"
-                        },
-                        new Link{
-                            Href = Url.Link(nameof(Delete), new { _data.Id }),
-                            Rel = "delete-book",
-                            Method = "DELETE"
+            var _cacheKey = $"GetBook{id}{accept}";
+            var _cachedata = await _cache.GetStringAsync(_cacheKey);
+            if (string.IsNullOrEmpty(_cachedata)){
+                var _data = await _contexto.Livros.FirstOrDefaultAsync(w => w.Id == id);
+                if (_data == null) return NotFound(new Erro(-1, "Não foi possível localizar o livro desejado."));
+                if (accept.EndsWith("hateoas")) {
+                    var _hateoasData = new LinkHelper<Livro>{
+                        Value = _data,
+                        Links = new List<Link> {
+                            new Link{
+                                Href = Url.Link(nameof(Get), new { _data.Id }),
+                                Rel = "self",
+                                Method = "GET"
+                            },
+                            new Link{
+                                Href = Url.Link(nameof(Put), new { _data.Id }),
+                                Rel = "update-book",
+                                Method = "PUT"
+                            },
+                            new Link{
+                                Href = Url.Link(nameof(Delete), new { _data.Id }),
+                                Rel = "delete-book",
+                                Method = "DELETE"
+                            }
                         }
-                    }
-                });
-            } else {
-                return Ok(_data);
+                    };
+                    _cachedata = JsonConvert.SerializeObject(_hateoasData);
+                } 
+                else 
+                {
+                    _cachedata = JsonConvert.SerializeObject(_data);
+                }
+                await _cache.SetStringAsync(
+                    _cacheKey, 
+                    _cachedata, 
+                    new DistributedCacheEntryOptions().SetAbsoluteExpiration(TimeSpan.FromHours(1)));
             }
+            // return Ok(_cachedata);
+            return Content(_cachedata, "application/json");
         }
 
         /// <summary>
@@ -153,7 +170,7 @@ namespace restfulaspnetcore.api.Controllers
         /// <response code="204">Sem conteúdo. O registro do livro deve manter-se identico ao informado como parametro.</response>
         /// <response code="400">Solicitação de atualização contém informações inválidas. Consulte a resposta de erro para detalhes.</response>
         /// <response code="404">Atualização não pode ser executada porque não foi encontrado um livro com a identificação informada.</response>
-        [HttpPut("{id}")]
+        [HttpPut("{id}", Name = "Put")]
         [ProducesResponseType(204)]
         [ProducesResponseType(typeof(Erro), 400)]
         [ProducesResponseType(typeof(Erro), 404)]
@@ -175,7 +192,7 @@ namespace restfulaspnetcore.api.Controllers
         /// <returns>Sem conteúdo.</returns>
         /// <response code="204">Sem conteúdo. </response>
         /// <response code="404">Deleção não pode ser executada porque não foi encontrado um livro com a identificação informada.</response>
-        [HttpDelete("{id}")]
+        [HttpDelete("{id}", Name = "Delete")]
         [MapToApiVersion( "1.0" )]
         [ProducesResponseType(204)]
         [ProducesResponseType(typeof(Erro), 404)]

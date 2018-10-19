@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -8,11 +9,13 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using restfulaspnetcore.api.Infrastructure.Data;
 using Swashbuckle.AspNetCore.Swagger;
 
@@ -32,9 +35,30 @@ namespace restfulaspnetcore.api
         {
             services.AddDbContext<ContextoAplicacao>(options => options.UseSqlServer(Configuration.GetConnectionString("AppConnection")));
 
+            //CACHING
+            services.AddDistributedRedisCache(options => {
+                options.Configuration = Configuration.GetConnectionString("RedisConnection");
+                options.InstanceName = "main";
+            });
+            
+            //COMPRESSION
+            services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Optimal);
+            services.AddResponseCompression(options => {
+               options.Providers.Add<GzipCompressionProvider>();
+               options.EnableForHttps = true; 
+            });
+
             services
                 .AddMvc()
+                .AddJsonOptions(options => {
+                    // JSON OPTIMIZATION
+                    options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Serialize;
+                    options.SerializerSettings.PreserveReferencesHandling = PreserveReferencesHandling.Objects;
+                    options.SerializerSettings.NullValueHandling = NullValueHandling.Ignore;
+                    options.SerializerSettings.Formatting = Formatting.None;
+                })
                 .SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+
             //ADD API VERSIONING
             services
                 .AddMvcCore()
@@ -43,6 +67,7 @@ namespace restfulaspnetcore.api
                     options.SubstituteApiVersionInUrl = true;
                 });
             services.AddApiVersioning(options => options.ReportApiVersions = true);
+
             //ADDING SWAGGER SUPPORT
             services.AddSwaggerGen(options => {
                 // //ADD BASE INFORMATION
@@ -86,6 +111,8 @@ namespace restfulaspnetcore.api
             }
 
             app.UseHttpsRedirection();
+
+            //SWAGGER
             app.UseSwagger();
             app.UseSwaggerUI(options => {
                 // options.SwaggerEndpoint("/swagger/v1/swagger.json", "Nome API");
@@ -96,6 +123,10 @@ namespace restfulaspnetcore.api
                     options.SwaggerEndpoint( $"/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant() );
                 }
             });
+
+            //COMPRESSION
+            app.UseResponseCompression();
+
             app.UseMvc();
         }
     }
